@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>注音大師</title>
+<style>
+    body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; background: #FFDE00; margin: 0; text-align: center; overflow: hidden; touch-action: manipulation; }
+    .hidden { display: none !important; }
+    #menu, #game, #result { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px; box-sizing: border-box; }
+    #result { overflow-y: auto; padding-bottom: 30px; }
+    h1 { text-shadow: 3px 3px #3B4CCA; color: white; margin-top: 10px; font-weight: 900; -webkit-text-stroke: 1px #3B4CCA; margin-bottom: 5px; }
+    
+    .unit-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 95%; margin: 10px 0; }
+    .unit-btn { padding: 10px 15px; font-size: 16px; font-weight: 900; background: white; border: 3px solid #3B4CCA; border-radius: 15px; cursor: pointer; color: #3B4CCA; }
+    .unit-btn.active { background: #3B4CCA; color: white; }
+    .all-btn { background: #CC0000; color: white; border-color: #8B0000; width: 85%; margin: 5px; }
+
+    .start-btn { width: 45%; padding: 15px; margin: 10px; font-size: 20px; font-weight: 900; background: #008000; color: white; border: 5px solid #fff; border-radius: 50px; box-shadow: 0 6px #004d00; cursor: pointer; }
+    #stats { width: 95%; background: #3B4CCA; color: #fff; border: 3px solid #FFDE00; border-radius: 15px; padding: 10px; display: flex; justify-content: space-around; font-size: 18px; font-weight: 900; z-index: 100; }
+    #target { margin: 10px 0; min-height: 140px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); border-radius: 20px; width: 90%; }
+
+    .zhuyin-frame { display: inline-flex; position: relative; padding: 5px 12px; line-height: 1.1; align-items: center; }
+    .zhuyin-main-column { display: flex; flex-direction: column; align-items: center; font-weight: 900; }
+    .tone-right { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: 0.65em; font-weight: normal; }
+    .tone-top { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 0.65em; font-weight: normal; }
+    #target .zhuyin-main-column { font-size: 70px; color: #3B4CCA; }
+    #target .tone-right, #target .tone-top { font-size: 40px; color: #CC0000; }
+
+    #balloons { position: relative; flex-grow: 1; width: 100%; overflow: hidden; }
+    .balloon { position: absolute; width: 130px; height: 165px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 4px solid rgba(255,255,255,0.9); box-shadow: inset -8px -8px rgba(0,0,0,0.15); transform: translate(-50%, -50%); }
+    .balloon .zhuyin-main-column { font-size: 40px; color: white; text-shadow: 2px 2px #000; }
+    .balloon .tone-right, .balloon .tone-top { font-size: 24px; color: white; text-shadow: 2px 2px #000; }
+    .balloon .char-text { font-size: 60px; color: white; font-weight: 900; text-shadow: 3px 3px #000; }
+
+    #review-section { width: 90%; background: white; border-radius: 15px; padding: 15px; margin-top: 15px; border: 4px solid #3B4CCA; }
+    .review-item { display: flex; justify-content: center; align-items: center; border-bottom: 2px dashed #ccc; padding: 8px; }
+    .review-char { font-size: 35px; font-weight: 900; color: #CC0000; margin-right: 15px; }
+    #special-msg { font-size: 22px; color: #fff; font-weight: 900; background: #3B4CCA; padding: 12px; border-radius: 20px; border: 5px solid #FFDE00; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+    <h1>注音大師</h1>
+    <p style="color:#3B4CCA; font-weight:900; margin: 2px;">Edge 建議點擊畫面後再開始遊戲唷！</p>
+    <div class="unit-container" id="unit-box"></div>
+    <button class="unit-btn all-btn" onclick="selectAll()">全選所有生字</button>
+    <div style="display:flex; width:90%; justify-content:center;">
+        <button class="start-btn" onclick="startGame('charToZhuyin')">看字找注音</button>
+        <button class="start-btn" style="background:#3B4CCA; box-shadow:0 6px #1D2A6B;" onclick="startGame('zhuyinToChar')">看注音找字</button>
+    </div>
+</div>
+
+<div id="game" class="hidden">
+    <div id="stats">
+        <div>題號 <span id="q">1</span>/10</div>
+        <div>倒數 <span id="timer">10</span>s</div>
+        <div>分數 <span id="score">0</span></div>
+    </div>
+    <div id="target"></div>
+    <div id="balloons"></div>
+</div>
+
+<div id="result" class="hidden">
+    <h1>遊戲結束</h1>
+    <p style="font-size:32px;color:#CC0000; font-weight:900;">你的得分：<span id="final">0</span></p>
+    <div id="pokemon-container"></div>
+    <div id="review-section" class="hidden">
+        <h3 style="color:#3B4CCA; margin-top:0;">錯題練習簿</h3>
+        <div id="review-list"></div>
+    </div>
+    <button class="start-btn" style="width:80%" onclick="location.reload()">回選單</button>
+</div>
+
+<script>
+// 使用全域物件包裝，確保在使用者點擊後才啟用
+let audioCtx, gameTimer, timeLeft, floatAnimReq;
+let balloonsData = [];
+let mistakes = [];
+let selectedUnits = new Set(['一上']);
+const reverseZhuyinMap = {};
+
+const rawData = {
+    "一上": "日,月,山,木,水,人,手,門,小,上,走,左,右,向,魚,也,來,加,船,前,油,開,出,招,車,子,地,花,朵,在,笑,印,張,臉,泡,玩,大,起,好,多,我,的,你,抱,吹,家,像,爸,到,青,叫,下,那,和,要,他,朋,友,跟,頭,想,做,外,住,個,們,這,裡,有,沒,是,什,麼,星,哪,球,河,流,金,說,句,話,兩,都,悄,尾,巴,滿,紅,吐,缸,搖,春,貼,呢,了,請,天,家,把,不,房,福,為,幸",
+    "一下-1": "太,充,電,雨,過,後,為,冬,土,草,冒,哭,心,陽,機",
+    "一下-2": "顏,色,細,著,問,鳥,綠,看,藍,空,媽,彩,中,虹,蜻,蜓",
+    "一下-3": "音,樂,會,坡,忙,布,場,入,口,河,林,間,風,跑,置",
+    "一下-4": "書,打,跳,陪,去,險,海,找,歡,神,奇,猜,次,誰,跟,恐,龍,豚",
+    "一下-5": "喜,帶,氣,球,始,吹,突,然,得,高,樹,給,可,理,只,輕,飛,還",
+    "一下-6": "居,孩,常,躲,發,現,就,頭,回,想,但,怎,知,道,先,鄰,縮,讓",
+    "一下-7": "畫,愛,送,寫,祝,張,臉,感,謝,老,師,啊,還,漂,亮,顆,蛋,糕",
+    "一下-8": "卡,片,秋,採,果,吃,飽,方,埋,進,很,久,嗎,長,敬,松,鼠,從,等",
+    "一下-9": "奶,貝,早,校,園,工,作,她,邊,汗,學,您,樣,當,成,寶,擦,澆",
+    "一下-10": "井,隻,除,睡,覺,東,西,拍,肚,唉,幾,世,界,連,裝,蛙,窪",
+    "一下-11": "星,面,許,池,圈,波,紋,見,快,告,訴,光,拉,怪,呀,鴨,塘",
+    "一下-12": "止,半,羊,田,再,瓜,苗,辛,苦,油,能,收,甜,分,享,豬,種,葉"
+};
+
+const zhuyinMap = {
+    "日":"ㄖˋ","月":"ㄩㄝˋ","山":"ㄕㄢ","木":"ㄇㄨˋ","水":"ㄕㄨㄟˇ","人":"ㄖㄣˊ","手":"ㄕㄡˇ","門":"ㄇㄣˊ","小":"ㄒㄧㄠˇ","上":"ㄕㄤˋ","走":"ㄗㄡˇ","左":"ㄗㄨㄛˇ","右":"ㄧㄡˋ","向":"ㄒㄧㄤˋ","魚":"ㄩˊ","也":"ㄧㄝˇ","來":"ㄌㄞˊ","加":"ㄐㄧㄚ","船":"ㄔㄨㄢˊ","前":"ㄑㄧㄢˊ","油":"ㄧㄡˊ","開":"ㄎㄞ","出":"ㄔㄨ","招":"ㄓㄠ","車":"ㄔㄜ","子":"ㄗˇ","地":"ㄉㄧˋ","花":"ㄏㄨㄚ","朵":"ㄉㄨㄛˇ","在":"ㄗㄞˋ","笑":"ㄒㄧㄠˋ","印":"ㄧㄣˋ","張":"ㄓㄤ","臉":"ㄌㄧㄢˇ","泡":"ㄆㄠˋ","玩":"ㄨㄢˊ","大":"ㄉㄚˋ","起":"ㄑㄧˇ","好":"ㄏㄠˇ","多":"ㄉㄨㄛ","我":"ㄨㄛˇ","的":"˙ㄉㄜ","你":"ㄋㄧˇ","抱":"ㄅㄠˋ","吹":"ㄔㄨㄟ","家":"ㄐㄧㄚ","像":"ㄒㄧㄤˋ","爸":"ㄅㄚˋ","到":"ㄉㄠˋ","青":"ㄑㄧㄥ","叫":"ㄐㄧㄠˋ","下":"ㄒㄧㄚˋ","那":"ㄋㄚˋ","和":"ㄏㄢˋ","要":"ㄧㄠˋ","他":"ㄊㄚ","朋":"ㄆㄥˊ","友":"ㄧㄡˇ","跟":"ㄍㄣ","頭":"ㄊㄡˊ","想":"ㄒㄧㄤˇ","做":"ㄗㄨㄛˋ","外":"ㄨㄞˋ","住":"ㄓㄨˋ","個":"ㄍㄜˋ","們":"˙ㄇㄣ","這":"ㄓㄜˋ","裡":"ㄌㄧˇ","有":"ㄧㄡˇ","沒":"ㄇㄟˊ","是":"ㄕˋ","什":"ㄕㄣˊ","麼":"˙ㄇㄜ","星":"ㄒㄧㄥ","哪":"ㄋㄚˇ","球":"ㄑㄧㄡˊ","河":"ㄏㄜˊ","流":"ㄌㄧㄡˊ","金":"ㄐㄧㄣ","說":"ㄕㄨㄛ","句":"ㄐㄩˋ","話":"ㄏㄨㄚˋ","兩":"ㄌㄧㄤˇ","都":"ㄉㄡ","悄":"ㄑㄧㄠˇ","尾":"ㄨㄟˇ","巴":"ㄅㄚ","滿":"ㄇㄢˇ","紅":"ㄏㄨㄥˊ","吐":"ㄊㄨˇ","缸":"ㄍㄤ","搖":"ㄧㄠˊ","春":"ㄔㄨㄣ","貼":"ㄊㄧㄝ","呢":"˙ㄋㄜ","了":"˙ㄌㄜ","請":"ㄑㄧㄥˇ","天":"ㄊㄧㄢ","把":"ㄅㄚˇ","不":"ㄅㄨˋ","房":"ㄈㄤˊ","福":"ㄈㄨˊ","為":"ㄨㄟˋ","幸":"ㄒㄧㄥˋ",
+    "太":"ㄊㄞˋ","充":"ㄔㄨㄥ","電":"ㄉㄧㄢˋ","雨":"ㄩˇ","過":"ㄍㄨㄛˋ","後":"ㄏㄡˋ","冬":"ㄉㄨㄥ","土":"ㄊㄨˇ","草":"ㄘㄠˇ","冒":"ㄇㄠˋ","哭":"ㄎㄨ","心":"ㄒㄧㄣ","陽":"ㄧㄤˊ","機":"ㄐㄧ","顏":"ㄧㄢˊ","色":"ㄙㄜˋ","細":"ㄒㄧˋ","著":"ㄓㄜ˙","問":"ㄨㄣˋ","鳥":"ㄋㄧㄠˇ","綠":"ㄌㄩˋ","看":"ㄎㄢˋ","藍":"ㄌㄢˊ","空":"ㄎㄨㄥ","媽":"ㄇㄚ","彩":"ㄘㄞˇ","中":"ㄓㄨㄥ","虹":"ㄏㄨㄥˊ","蜻":"ㄑㄧㄥ","蜓":"ㄊㄧㄥˊ","音":"ㄧㄣ","樂":"ㄩㄝˋ","會":"ㄏㄨㄟˋ","坡":"ㄆㄛ","忙":"ㄇㄤˊ","布":"ㄅㄨˋ","場":"ㄔㄤˇ","入":"ㄖㄨˋ","口":"ㄎㄡˇ","林":"ㄌㄧㄣˊ","間":"ㄐㄧㄢ","風":"ㄈㄥ","跑":"ㄆㄠˇ","置":"ㄓˋ","書":"ㄕㄨ","打":"ㄉㄚˇ","跳":"ㄊㄧㄠˋ","陪":"ㄆㄟˊ","去":"ㄑㄩˋ","險":"ㄒㄧㄢˇ","海":"ㄏㄞˇ","找":"ㄓㄠˇ","歡":"ㄏㄨㄢ","神":"ㄕㄣˊ","奇":"ㄑㄧˊ","猜":"ㄘㄞ","次":"ㄘˋ","誰":"ㄕㄟˊ","恐":"ㄎㄨㄥˇ","龍":"ㄌㄨㄥˊ","豚":"ㄊㄨㄣˊ","喜":"ㄒㄧˇ","帶":"ㄉㄞˋ","氣":"ㄑㄧˋ","始":"ㄕˇ","吹":"ㄔㄨㄟ","突":"ㄊㄨˊ","然":"ㄖㄢˊ","得":"ㄉㄜˊ","高":"ㄍㄠ","樹":"ㄕㄨˋ","給":"ㄍㄟˇ","可":"ㄎㄜˇ","理":"ㄌㄧˇ","只":"ㄓˇ","輕":"ㄑㄧㄥ","飛":"ㄈㄟ","還":"ㄏㄞˊ","居":"ㄐㄩ","孩":"ㄏㄞˊ","常":"ㄔㄤˊ","躲":"ㄉㄨㄛˇ","發":"ㄈㄚ","現":"ㄒㄧㄢˋ","就":"ㄐㄧㄡˋ","回":"ㄏㄨㄟˊ","但":"ㄉㄢˋ","怎":"ㄗㄣˇ","知":"ㄓ","道":"ㄉㄠˋ","先":"ㄒㄧㄢ","鄰":"ㄌㄧㄣˊ","縮":"ㄙㄨㄛ","讓":"ㄖㄤˋ","畫":"ㄏㄨㄚˋ","愛":"ㄞˋ","送":"ㄙㄨㄥˋ","寫":"ㄒㄧㄝˇ","祝":"ㄓㄨˋ","臉":"ㄌㄧㄢˇ","感":"ㄍㄢˇ","謝":"ㄒㄧㄝˋ","老":"ㄌㄠˇ","師":"ㄕ","啊":"ㄚ","漂":"ㄆㄧㄠˋ","亮":"ㄌㄧㄤˋ","顆":"ㄎㄜ","蛋":"ㄉㄢˋ","糕":"ㄍㄠ","卡":"ㄎㄚˇ","片":"ㄆㄧㄢˋ","秋":"ㄑㄧㄡ","採":"ㄘㄞˇ","果":"ㄍㄨㄛˇ","吃":"ㄔ","飽":"ㄅㄠˇ","方":"ㄈㄤ","埋":"ㄇㄞˊ","進":"ㄐㄧㄣˋ","很":"ㄏㄣˇ","久":"ㄐㄧㄡˇ","嗎":"ㄇㄚ˙","長":"ㄓㄤˇ","敬":"ㄐㄧㄥˋ","松":"ㄙㄨㄥ","鼠":"ㄕㄨˇ","從":"ㄘㄨㄥˊ","等":"ㄉㄥˇ","奶":"ㄋㄞˇ","貝":"ㄅㄟˋ","早":"ㄗㄠˇ","校":"ㄒㄧㄠˋ","園":"ㄩㄢˊ","工":"ㄍㄨㄥ","作":"ㄗㄨㄛˋ","她":"ㄊㄚ","邊":"ㄅㄧㄢ","汗":"ㄏㄢˋ","學":"ㄒㄩㄝˊ","您":"ㄋㄧㄣˊ","樣":"ㄧㄤˋ","當":"ㄉㄤ","成":"ㄔㄥˊ","寶":"ㄅㄠˇ","擦":"ㄘㄚ","澆":"ㄐㄧㄠ","井":"ㄐㄧㄥˇ","隻":"ㄓ","除":"ㄔㄨˊ","睡":"ㄕㄨㄟˋ","覺":"ㄐㄧㄠˋ","西":"ㄒㄧ","拍":"ㄆㄞ","肚":"ㄉㄨˋ","唉":"ㄞ","幾":"ㄐㄧˇ","世":"ㄕˋ","界":"ㄐㄧㄝˋ","連":"ㄌㄧㄢˊ","裝":"ㄓㄨㄤ","蛙":"ㄨㄚ","窪":"ㄨㄚ","面":"ㄇㄧㄢˋ","許":"ㄒㄩˇ","池":"ㄔˊ","圈":"ㄑㄩㄢ","波":"ㄅㄛ","紋":"ㄨㄣˊ","見":"ㄐㄧㄢˋ","快":"ㄎㄨㄞˋ","告":"ㄍㄠˋ","訴":"ㄙㄨˋ","光":"ㄍㄨㄤ","拉":"ㄌㄚ","怪":"ㄍㄨㄞˋ","呀":"ㄧㄚ˙","鴨":"ㄧㄚ","塘":"ㄊㄤˊ","止":"ㄓˇ","半":"ㄅㄢˋ","羊":"ㄧㄤˊ","田":"ㄊㄧㄢˊ","再":"ㄗㄞˋ","瓜":"ㄍㄨㄚ","苗":"ㄇㄧㄠˊ","辛":"ㄒㄧㄣ","苦":"ㄎㄨˇ","能":"ㄋㄥˊ","收":"ㄕㄡ","甜":"ㄊㄧㄢˊ","分":"ㄈㄣ","享":"ㄒㄧㄤˇ","豬":"ㄓㄨ","種":"ㄓㄨㄥˋ","葉":"ㄧㄝˋ"
+};
+
+Object.keys(zhuyinMap).forEach(key => {
+    const zh = zhuyinMap[key];
+    if (!reverseZhuyinMap[zh]) reverseZhuyinMap[zh] = key;
+});
+
+const pokes = [{n:"皮卡丘",id:25},{n:"新葉喵",id:906},{n:"呆火鱷",id:909},{n:"潤水鴨",id:912},{n:"噴火龍",id:6},{n:"超夢",id:150},{n:"烈空坐",id:384},{n:"路卡利歐",id:448},{n:"仙子伊布",id:700},{n:"伊布",id:133},{n:"水伊布",id:134},{n:"雷伊布",id:135},{n:"火伊布",id:136},{n:"太陽伊布",id:196},{n:"月亮伊布",id:197},{n:"葉伊布",id:470},{n:"冰伊布",id:471},{n:"甲賀忍蛙",id:658},{n:"密勒頓",id:1008},{n:"故勒頓",id:1007},{n:"蒼響",id:888},{n:"藏瑪然特",id:889},{n:"耿鬼",id:94},{n:"卡比獸",id:143},{n:"快龍",id:149},{n:"波加曼",id:393},{n:"木木梟",id:722},{n:"炎兔兒",id:813},{n:"索羅亞克",id:571},{n:"拉普拉斯",id:131},{n:"沙奈朵",id:282},{n:"烈咬陸鯊",id:445},{n:"班基拉斯",id:248},{n:"巨金怪",id:376},{n:"洛奇亞",id:249},{n:"鳳王",id:250},{n:"蓋歐卡",id:382},{n:"固拉多",id:383},{n:"帝牙盧卡",id:483},{n:"帕路奇亞",id:484},{n:"騎拉帝納",id:487},{n:"阿爾宙斯",id:493},{n:"夢幻",id:151},{n:"比克提尼",id:494},{n:"謝米",id:492},{n:"基拉祈",id:385},{n:"可達鴨",id:54},{n:"胖丁",id:39},{n:"喵喵",id:52},{n:"波克比",id:175}];
+
+function initMenu() {
+    const box = document.getElementById('unit-box');
+    Object.keys(rawData).forEach(key => {
+        const btn = document.createElement('button');
+        btn.className = `unit-btn ${selectedUnits.has(key) ? 'active' : ''}`;
+        btn.innerText = key;
+        btn.onclick = (e) => {
+            handleInteraction(); // 關鍵：任何按鈕點擊都嘗試啟動音訊
+            if (selectedUnits.has(key)) selectedUnits.delete(key);
+            else selectedUnits.add(key);
+            btn.classList.toggle('active');
+        };
+        box.appendChild(btn);
+    });
+}
+
+function selectAll() {
+    handleInteraction();
+    Object.keys(rawData).forEach(key => selectedUnits.add(key));
+    document.querySelectorAll('.unit-btn').forEach(btn => btn.classList.add('active'));
+}
+
+// 修正：主動喚醒音訊環境與語音引擎
+function handleInteraction() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    // 預熱語音引擎（針對 Edge）
+    const dummy = new SpeechSynthesisUtterance("");
+    window.speechSynthesis.speak(dummy);
+}
+
+let q=0, score=0, mode='', questionPool = [], canGetScore = true;
+
+function startGame(m) {
+    handleInteraction();
+    if (selectedUnits.size === 0) return alert("請要先選一個單元唷！");
+    mode = m; mistakes = [];
+    let allWords = [];
+    selectedUnits.forEach(u => allWords = allWords.concat(rawData[u].split(',')));
+    allWords = [...new Set(allWords)];
+    questionPool = allWords.sort(() => Math.random() - 0.5).slice(0, 10);
+    document.getElementById("menu").classList.add("hidden");
+    document.getElementById("game").classList.remove("hidden");
+    next(); animateFloat();
+}
+
+function speakReading(input, isCorrect = false) {
+    window.speechSynthesis.cancel();
+    let textToSpeak = reverseZhuyinMap[input] || input;
+    const u = new SpeechSynthesisUtterance(textToSpeak);
+    u.lang = "zh-TW"; u.rate = 0.85;
+    if (isCorrect) {
+        u.onend = () => {
+            const praise = new SpeechSynthesisUtterance("你好棒唷");
+            praise.lang = "zh-TW";
+            window.speechSynthesis.speak(praise);
+        };
+    }
+    window.speechSynthesis.speak(u);
+}
+
+function renderZhuyin(str) {
+    let m = "", tr = "", tt = "";
+    for(let c of str) { if(["ˊ","ˇ","ˋ"].includes(c)) tr = c; else if(c === "˙") tt = c; else m += c; }
+    let mainHtml = ""; for(let char of m) mainHtml += `<span>${char}</span>`;
+    return `<div class="zhuyin-frame">${tt ? `<div class="tone-top">${tt}</div>` : ''}<div class="zhuyin-main-column">${mainHtml}</div>${tr ? `<div class="tone-right">${tr}</div>` : ''}</div>`;
+}
+
+function next() {
+    if(q >= 10 || q >= questionPool.length) return end();
+    clearInterval(gameTimer);
+    let currentChar = questionPool[q];
+    let answer = zhuyinMap[currentChar];
+    q++; canGetScore = true; timeLeft = 10;
+    document.getElementById("q").innerText = q;
+    document.getElementById("timer").innerText = timeLeft;
+    document.getElementById("target").innerHTML = (mode === 'charToZhuyin') ? `<div style="font-size:90px; font-weight:900; color:#CC0000;">${currentChar}</div>` : renderZhuyin(answer);
+    initBalloons(currentChar, answer);
+    gameTimer = setInterval(() => {
+        timeLeft--; document.getElementById("timer").innerText = timeLeft;
+        if(timeLeft <= 0) { mistakes.push(currentChar); next(); }
+    }, 1000);
+}
+
+function initBalloons(curChar, ans) {
+    const box = document.getElementById("balloons");
+    box.innerHTML = ""; balloonsData = [];
+    let correctVal = (mode === 'charToZhuyin') ? ans : curChar;
+    let opts = [{t: correctVal, isC: true}];
+    let allKeys = Object.keys(zhuyinMap);
+    while(opts.length < 6){
+        let rKey = allKeys[Math.floor(Math.random()*allKeys.length)];
+        let rVal = (mode === 'charToZhuyin') ? zhuyinMap[rKey] : rKey;
+        if(!opts.find(o => o.t === rVal)) opts.push({t: rVal, isC: false});
+    }
+    opts.sort(() => Math.random() - 0.5);
+    const gridPositions = [{x:25, y:25}, {x:50, y:25}, {x:75, y:25}, {x:25, y:70}, {x:50, y:70}, {x:75, y:70}].sort(() => Math.random() - 0.5);
+
+    opts.forEach((opt, i) => {
+        const b = document.createElement("div");
+        b.className = "balloon";
+        let hue = (i * 60); if(hue >= 40 && hue <= 70) hue += 40; 
+        b.style.background = `hsl(${hue}, 80%, 60%)`;
+        b.innerHTML = (mode === 'charToZhuyin') ? renderZhuyin(opt.t) : `<span class="char-text">${opt.t}</span>`;
+        box.appendChild(b);
+        const data = { el: b, baseX: gridPositions[i].x, baseY: gridPositions[i].y, offset: Math.random() * 5, isC: opt.isC, text: opt.t };
+        b.style.left = data.baseX + "%"; b.style.top = data.baseY + "%";
+        b.onclick = () => {
+            handleInteraction(); // 點擊氣球時也確認音訊狀態
+            if(opt.isC) {
+                speakReading(data.text, true);
+                if(audioCtx) {
+                    let o = audioCtx.createOscillator(); let g = audioCtx.createGain(); o.type='sine'; o.frequency.setValueAtTime(523, audioCtx.currentTime); o.frequency.exponentialRampToValueAtTime(1046, audioCtx.currentTime+0.2); g.gain.setValueAtTime(0.5, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime+0.2); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.2);
+                }
+                if(canGetScore) { score += 10; document.getElementById("score").innerText = score; }
+                b.style.transform = "translate(-50%, -50%) scale(0)"; setTimeout(next, 800);
+            } else {
+                speakReading(data.text, false);
+                if(audioCtx) {
+                    let o = audioCtx.createOscillator(); let g = audioCtx.createGain(); o.type='triangle'; o.frequency.setValueAtTime(200, audioCtx.currentTime); o.frequency.linearRampToValueAtTime(60, audioCtx.currentTime+0.3); g.gain.setValueAtTime(0.5, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime+0.3); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.3);
+                }
+                if(canGetScore) mistakes.push(curChar);
+                canGetScore = false; b.style.opacity = "0.3"; b.style.pointerEvents = "none";
+            }
+        };
+        balloonsData.push(data);
+    });
+}
+
+function animateFloat() {
+    const time = Date.now() * 0.002;
+    balloonsData.forEach(b => {
+        const dy = Math.sin(time + b.offset) * 2;
+        b.el.style.top = (b.baseY + dy) + "%";
+    });
+    floatAnimReq = requestAnimationFrame(animateFloat);
+}
+
+function end() {
+    clearInterval(gameTimer); cancelAnimationFrame(floatAnimReq);
+    document.getElementById("game").classList.add("hidden");
+    document.getElementById("result").classList.remove("hidden");
+    document.getElementById("final").innerText = score;
+    if(score === 100) {
+        const p = pokes[Math.floor(Math.random()*pokes.length)];
+        document.getElementById("pokemon-container").innerHTML = `<img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${p.id}.png" width="200"><div id="special-msg">${p.n} 挑戰成功！你真是太強了！</div>`;
+        const u = new SpeechSynthesisUtterance("挑戰成功！送你強大的" + p.n); u.lang="zh-TW"; window.speechSynthesis.speak(u);
+    } else {
+        if(mistakes.length > 0) {
+            document.getElementById("review-section").classList.remove("hidden");
+            const list = document.getElementById("review-list");
+            list.innerHTML = "";
+            [...new Set(mistakes)].forEach(char => {
+                const item = document.createElement("div");
+                item.className = "review-item";
+                item.innerHTML = `<div class="review-char">${char}</div><div class="review-zhuyin">${renderZhuyin(zhuyinMap[char])}</div>`;
+                list.appendChild(item);
+            });
+        }
+    }
+}
+
+// 初始化選單
+initMenu();
+</script>
+</body>
+</html>
